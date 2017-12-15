@@ -5,6 +5,25 @@ import math
 import random
 import csv
 
+"""
+This is a pure Python implementation of the K-Means Clustering algorithmn. The
+original can be found here:
+http://pandoricweb.tumblr.com/post/8646701677/python-implementation-of-the-k-means-clustering
+I have refactored the code and added comments to aid in readability.
+After reading through this code you should understand clearly how K-means works.
+If not, feel free to email me with questions and suggestions. (iandanforth at
+gmail)
+This script specifically avoids using numpy or other more obscure libraries. It
+is meant to be *clear* not fast.
+I have also added integration with the plot.ly plotting library. So you can see
+the clusters found by this algorithm. To install run:
+```
+pip install plotly
+```
+This script uses an offline plotting mode and will store and open plots locally.
+To store and share plots online sign up for a plotly API key at https://plot.ly.
+"""
+
 plotly = False
 try:
     import plotly
@@ -19,11 +38,11 @@ def main():
 
     # For each of those points how many dimensions do they have?
     # Note: Plotting will only work in two or three dimensions
-    dimensions = 3
+    dimensions = 4
 
     # Bounds for the values of those points in each dimension
     lower = 0
-    upper = 150
+    upper = 10
 
     # The K in k-means. How many clusters do we assume exist?
     num_clusters = 3
@@ -32,8 +51,14 @@ def main():
     cutoff = 0.2
 
     # Generate some points to cluster
-    points = loadDataset('dataset.csv')
-    
+    #points = []
+    with open ("dataset.csv", 'rb') as csvfile:
+        lines = csv.reader(csvfile)
+        points = [makeline(row) for row in lines]
+ 
+    # points = [
+    #     makeRandomPoint(dimensions, lower, upper) for i in xrange(num_points)
+    # ]
 
     # Cluster those data!
     clusters = kmeans(points, num_clusters, cutoff)
@@ -59,6 +84,7 @@ class Point(object):
 
         self.coords = coords
         self.n = len(coords)
+
     def __repr__(self):
         return str(self.coords)
 
@@ -71,7 +97,7 @@ class Cluster(object):
         '''
         points - A list of point objects
         '''
-        
+
         if len(points) == 0:
             raise Exception("ERROR: empty cluster")
 
@@ -79,18 +105,18 @@ class Cluster(object):
         self.points = points
 
         # The dimensionality of the points in this cluster
-        self.n = len(points[0])
+        self.n = points[0].n
 
         # Assert that all points are of the same dimensionality
         for p in points:
-            if len(p) != self.n:
+            if p.n != self.n:
                 raise Exception("ERROR: inconsistent dimensions")
 
         # Set up the initial centroid (this is usually based off one point)
         self.centroid = self.calculateCentroid()
 
     def __repr__(self):
-        '''r
+        '''
         String representation of this object
         '''
         return str(self.points)
@@ -105,9 +131,6 @@ class Cluster(object):
         old_centroid = self.centroid
         self.points = points
         self.centroid = self.calculateCentroid()
-        print "this is old centroid = %s" %old_centroid
-        print "this is self centroid = %s" %self.centroid
-
         shift = getDistance(old_centroid, self.centroid)
         return shift
 
@@ -115,32 +138,22 @@ class Cluster(object):
         '''
         Finds a virtual center point for a group of n-dimensional points
         '''
-        print "-----------CALCULATE CENTROID-------------"
         numPoints = len(self.points)
         # Get a list of all coordinates in this cluster
-        coords = []
-        for p in self.points:
-            coords.append(p)
-        #coords = [p.coords for p in self.points]
+        coords = [p.coords for p in self.points]
         # Reformat that so all x's are together, all y'z etc.
-        print coords
         unzipped = zip(*coords)
         # Calculate the mean for each dimension
-        centroid_coords = []
-        # for dlist in unzipped:
-        #     for elements in dlist:
-        #         print type (elements)
-        #     print numPoints
-        #     centroid_coords.append(math.fsum(dlist)/numPoints)
+        centroid_coords = []        
 
         centroid_coords = [math.fsum(dList)/numPoints for dList in unzipped]
-
         return Point(centroid_coords)
 
 def kmeans(points, k, cutoff):
 
     # Pick out k random points to use as our initial centroids
     initial = random.sample(points, k)
+
     # Create k clusters using those centroids
     # Note: Cluster takes lists, so we wrap each point in a list here.
     clusters = [Cluster([p]) for p in initial]
@@ -199,42 +212,30 @@ def getDistance(a, b):
     https://en.wikipedia.org/wiki/Euclidean_distance#n_dimensions
     Note: This can be very slow and does not scale well
     '''
-    if type(a) == list:
-        if len(a) != b.n:
-            raise Exception("ERROR: non comparable points")
+    if a.n != b.n:
+        raise Exception("ERROR: non comparable points")
 
-            accumulatedDifference = 0.0
-            for i in range(len(a)):
-                squareDifference = pow((a[i]-b.coords[i]), 2)
-                accumulatedDifference += squareDifference
-            distance = math.sqrt(accumulatedDifference)
+    accumulatedDifference = 0.0
+    for i in range(a.n):
+        squareDifference = pow((a.coords[i]-b.coords[i]), 2)
+        accumulatedDifference += squareDifference
+    distance = math.sqrt(accumulatedDifference)
 
-            return distance
-    else:
-        if a.n != b.n:
-            raise Exception("ERROR: non comparable points")
+    return distance
 
-            accumulatedDifference = 0.0
-            for i in range(len(a)):
-                squareDifference = pow((a.coords[i]-b.coords[i]), 2)
-                accumulatedDifference += squareDifference
-            distance = math.sqrt(accumulatedDifference)
-            return distance
-      
-def loadDataset(filename):
+def makeRandomPoint(n,lower,upper):
     '''
     Returns a Point object with n dimensions and values between lower and
     upper in each of those dimensions
     '''
-    with open (filename, 'rb') as csvfile:
-        lines = csv.reader(csvfile)
-        dataset = []
-        for row in lines:
-            p = []
-            for element in row[:-1]:
-                p.append(float(element))
-            dataset.append(p)
-        return dataset
+
+    p = Point([random.uniform(lower, upper) for _ in range(n)])
+    return p
+
+def makeline(row):
+    # for elements in row[:-1]:
+    p = Point([float(elements) for elements in row[:-1]])
+    return p
 
 def plotClusters(data, dimensions):
     '''

@@ -33,15 +33,15 @@ except ImportError:
 def main():
 
     # How many points are in our dataset?
-    num_points = 20
+    num_points = 150
 
     # For each of those points how many dimensions do they have?
     # Note: Plotting will only work in two or three dimensions
-    dimensions = 2
+    dimensions = 4
 
     # Bounds for the values of those points in each dimension
     lower = 0
-    upper = 200
+    upper = 10
 
     # The K in k-means. How many clusters do we assume exist?
     num_clusters = 3
@@ -138,8 +138,9 @@ class Cluster(object):
         # Reformat that so all x's are together, all y'z etc.
         unzipped = zip(*coords)
         # Calculate the mean for each dimension
-        centroid_coords = [math.fsum(dList)/numPoints for dList in unzipped]
+        centroid_coords = []        
 
+        centroid_coords = [math.fsum(dList)/numPoints for dList in unzipped]
         return Point(centroid_coords)
 
 def kmeans(points, k, cutoff):
