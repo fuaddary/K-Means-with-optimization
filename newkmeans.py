@@ -52,10 +52,10 @@ def main():
 
     # Generate some points to cluster
     #points = []
-    with open ("dataset.csv", 'rb') as csvfile:
+    with open ("input.csv", 'rb') as csvfile:
         lines = csv.reader(csvfile)
         points = [makeline(row) for row in lines]
- 
+    print points
     # points = [
     #     makeRandomPoint(dimensions, lower, upper) for i in xrange(num_points)
     # ]
@@ -65,8 +65,11 @@ def main():
 
     # Print our clusters
     for i, c in enumerate(clusters):
+        cluster_n = 0
         for p in c.points:
             print " Cluster: ", i, "\t Point :", p
+            cluster_n += 1
+        print "Cluster", i, " = ", cluster_n
 
     # Display clusters using plotly for 2d data
     if dimensions in [2, 3] and plotly:
@@ -167,6 +170,7 @@ def kmeans(points, k, cutoff):
 
         # Start counting loops
         loopCounter += 1
+        print "%s\n"%loopCounter
         # For every point in the dataset ...
         for p in points:
             # Get the distance between that point and the centroid of the first
@@ -199,7 +203,7 @@ def kmeans(points, k, cutoff):
             shift = clusters[i].update(lists[i])
             # Keep track of the largest move from all cluster centroid updates
             biggest_shift = max(biggest_shift, shift)
-
+        print "biggest_shift %s"%biggest_shift
         # If the centroids have stopped moving much, say we're done!
         if biggest_shift < cutoff:
             print "Converged after %s iterations" % loopCounter
@@ -234,7 +238,9 @@ def makeRandomPoint(n,lower,upper):
 
 def makeline(row):
     # for elements in row[:-1]:
+    print row
     p = Point([float(elements) for elements in row[:-1]])
+    print p
     return p
 
 def plotClusters(data, dimensions):
