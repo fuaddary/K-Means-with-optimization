@@ -4,7 +4,6 @@
 import math
 import random
 import csv
-
 """
 This is a pure Python implementation of the K-Means Clustering algorithmn. The
 original can be found here:
@@ -24,12 +23,129 @@ This script uses an offline plotting mode and will store and open plots locally.
 To store and share plots online sign up for a plotly API key at https://plot.ly.
 """
 
-plotly = False
-try:
-    import plotly
-    from plotly.graph_objs import Scatter, Scatter3d, Layout
-except ImportError:
-    print "INFO: Plotly is not installed, plots will not be generated."
+from Aux import *
+
+class Individual (object):
+    def __init__(self,x,k,genes):
+        self.genes = genes
+        if x!= None:
+            for i in range (0,k):
+                #random initial point
+                point = x[randint(0,len(x)-1)]
+                #gen = x
+                for coord in point:
+                    self.genes.append(coord)
+            self.dim = len(x[0])
+        else:
+            self.dim = len(genes)/k
+
+    #assign each point to a cluster
+    def assign(self,x):
+        output = []
+        for point in x:
+            distance = []
+            for index in range (0,len(self.genes)/self.dim):
+                distance.append(np.linalg.norm(np.array(point)-np.array(self.genes[index*self.dim:(index+1)*self.dim])))
+            output.append(np.argmin(distance))
+        return output
+
+    #windexes of points that belong to a given cluster
+    def elements (self,cluster,output):
+        return np.where(np.array(output)==cluster)[0]
+
+    #update clusters centroids based on assignments
+    def update (self,x,output):
+        for index in range (0,len(self.genes)/self.dim):
+            xi = self.elements(index,output)
+            for d in range(index*self.dim,(index+1)*self.dim):
+                self.genes[d] = sum([x[item][d%self.dim] for item in xi])/len(xi) if len(xi)!=0 else self.genes[d]
+    
+    #intracluster distance = max d(i,j)
+    def intracluster (self,x,output):
+        intra = []
+        for index in range(0,len(self.genes)/self.dim):
+            xi = self.elements(index,output)
+            dmax = 0
+            for m,point1 in enumerate(xi):
+                for point2 in xi[m+1:]:
+                    d = np.linalg.norm(np.array(x[point1])-np.array(x[point2]))
+                    if d > dmax:
+                        dmax = d
+            intra.append(dmax)
+        return intra
+
+    #intercluster distance for all clusters
+    def intercluster (self):
+        inter = []
+        for index in range(0,len(self.genes)/self.dim):
+            for j in range (index+1,len(self.genes)/self.dim):
+                inter.append(np.linalg.norm(np.array(self.genes[index*self.dim:(index+1)*self.dim])-np.array(self.genes[j*self.dim:(j+1)*self.dim])))
+        return inter
+
+    def fitness (self,x):
+        output = self.assign(x)
+        self.update(x,output)
+        return min(self.intercluster())/max(self.intracluster(x,self.assign(x)))
+
+    def mutation (self,pmut):
+        for g,gene in enumerate(self.genes):
+            if uniform(0,1) <= pmut:
+                delta = uniform(0,1)
+                if uniform(0,1) <= 0.5:
+                    self.genes[g] = gene - 2*delta*gene if gene!=0 else -2*delta
+                else:
+                    self.genes[g] = gene + 2*delta*gene if gene!=0 else 2*delta
+
+def GAPopulationInit (npop,x,k):
+    lists = [Individual(x,k,[]) for i in range (0,npop)]
+    return lists
+
+def Crossover (parent1, parent2,k):
+    point = randint(1,len(parent1.genes)-2)
+    return Individual(None,k,parent1.genes[:point]+parent2.genes[point:]), Individual(None,k,parent2.genes[:point]+parent1.genes[point:])
+
+def RouletteWheel (pop,fit):
+    sumf = sum(fit)
+    prob = [(item+sum(fit[:index]))/sumf for index,item in enumerate(fit)]
+    return pop[BinSearch(prob,uniform(0,1),0,len(prob)-1)]
+
+def GeneticAlg (npop,k,pcros,pmut,maxit,arqStr):
+    x,y = Inputs(arqStr)
+    pop = GAPopulationInit(npop,x,k)
+    fit = [indiv.fitness(x) for indiv in pop]
+    verybest = [pop[np.argmax(fit)],max(fit)]
+    for i in range(0,maxit):
+        print "Iterasi %s" % (i+1) ,
+        print "fitness : ", verybest[1]
+        fit = [indiv.fitness(x) for indiv in pop]
+        new = []
+        while len(new) < len(pop):
+            #selection
+            parent1 = RouletteWheel(pop,fit)
+            p = uniform(0,1)
+            #genetic operators
+            if p <= pcros:
+                parent2 = RouletteWheel(pop,fit)
+                while parent2 == parent1:
+                    parent2 = RouletteWheel(pop,fit)
+                child1, child2 = Crossover(parent1,parent2,k)
+                new.append(child1)
+                if len(new) < len(pop):
+                    new.append(child2)
+            else:
+                child = deepcopy(parent1)
+                child.mutation(pmut)
+                new.append(child)
+        pop = deepcopy(new)
+        #elitism (but individual is kept outside population)
+        if max(fit)>verybest[1]:
+            verybest = [pop[np.argmax(fit)],max(fit)]
+    print "\nFinal Fitness = %s" % verybest[1]
+    #return best cluster
+    p = verybest[0].genes[0:4]
+    q = verybest[0].genes[4:8]
+    r = verybest[0].genes[8:12]
+    return initial_centroid(p,q,r)
 
 def main():
 
@@ -52,10 +168,9 @@ def main():
 
     # Generate some points to cluster
     #points = []
-    with open ("input.csv", 'rb') as csvfile:
+    with open ("dataset.csv", 'rb') as csvfile:
         lines = csv.reader(csvfile)
         points = [makeline(row) for row in lines]
-    print points
     # points = [
     #     makeRandomPoint(dimensions, lower, upper) for i in xrange(num_points)
     # ]
@@ -70,11 +185,6 @@ def main():
             print " Cluster: ", i, "\t Point :", p
             cluster_n += 1
         print "Cluster", i, " = ", cluster_n
-
-    # Display clusters using plotly for 2d data
-    if dimensions in [2, 3] and plotly:
-        print "Plotting points, launching browser ..."
-        plotClusters(clusters, dimensions)
 
 class Point(object):
     '''
@@ -135,6 +245,7 @@ class Cluster(object):
         self.points = points
         self.centroid = self.calculateCentroid()
         shift = getDistance(old_centroid, self.centroid)
+        print "New Centroid : ",self.centroid
         return shift
 
     def calculateCentroid(self):
@@ -142,7 +253,6 @@ class Cluster(object):
         Finds a virtual center point for a group of n-dimensional points
         '''
         numPoints = len(self.points)
-        # Get a list of all coordinates in this cluster
         coords = [p.coords for p in self.points]
         # Reformat that so all x's are together, all y'z etc.
         unzipped = zip(*coords)
@@ -150,13 +260,17 @@ class Cluster(object):
         centroid_coords = []        
 
         centroid_coords = [math.fsum(dList)/numPoints for dList in unzipped]
+        # print "coords centroid : ",centroid_coords
         return Point(centroid_coords)
 
 def kmeans(points, k, cutoff):
 
     # Pick out k random points to use as our initial centroids
-    initial = random.sample(points, k)
-
+    #initial = random.sample(points, k)
+    initial = GeneticAlg(int(150),int(3),float(0.85),float(0.01),int(3),"iris.txt")
+    for elements in initial:
+        print "initial cluster centroid : ", elements
+    print "\n"
     # Create k clusters using those centroids
     # Note: Cluster takes lists, so we wrap each point in a list here.
     clusters = [Cluster([p]) for p in initial]
@@ -170,7 +284,6 @@ def kmeans(points, k, cutoff):
 
         # Start counting loops
         loopCounter += 1
-        print "%s\n"%loopCounter
         # For every point in the dataset ...
         for p in points:
             # Get the distance between that point and the centroid of the first
@@ -227,95 +340,21 @@ def getDistance(a, b):
 
     return distance
 
-def makeRandomPoint(n,lower,upper):
-    '''
-    Returns a Point object with n dimensions and values between lower and
-    upper in each of those dimensions
-    '''
-
-    p = Point([random.uniform(lower, upper) for _ in range(n)])
-    return p
-
 def makeline(row):
     # for elements in row[:-1]:
-    print row
     p = Point([float(elements) for elements in row[:-1]])
-    print p
     return p
 
-def plotClusters(data, dimensions):
-    '''
-    This uses the plotly offline mode to create a local HTML file.
-    This should open your default web browser.
-    '''
-    if dimensions not in [2, 3]:
-        raise Exception("Plots are only available for 2 and 3 dimensional data")
-
-    # Convert data into plotly format.
-    traceList = []
-    for i, c in enumerate(data):
-        # Get a list of x,y coordinates for the points in this cluster.
-        cluster_data = []
-        for point in c.points:
-            cluster_data.append(point.coords)
-
-        trace = {}
-        centroid = {}
-        if dimensions == 2:
-            # Convert our list of x,y's into an x list and a y list.
-            trace['x'], trace['y'] = zip(*cluster_data)
-            trace['mode'] = 'markers'
-            trace['marker'] = {}
-            trace['marker']['symbol'] = i
-            trace['marker']['size'] = 12
-            trace['name'] = "Cluster " + str(i)
-            traceList.append(Scatter(**trace))
-            # Centroid (A trace of length 1)
-            centroid['x'] = [c.centroid.coords[0]]
-            centroid['y'] = [c.centroid.coords[1]]
-            centroid['mode'] = 'markers'
-            centroid['marker'] = {}
-            centroid['marker']['symbol'] = i
-            centroid['marker']['color'] = 'rgb(200,10,10)'
-            centroid['name'] = "Centroid " + str(i)
-            traceList.append(Scatter(**centroid))
-        else:
-            symbols = [
-                "circle",
-                "square",
-                "diamond",
-                "circle-open",
-                "square-open",
-                "diamond-open",
-                "cross", "x"
-            ]
-            symbol_count = len(symbols)
-            if i > symbol_count:
-                print "Warning: Not enough marker symbols to go around"
-            # Convert our list of x,y,z's separate lists.
-            trace['x'], trace['y'], trace['z'] = zip(*cluster_data)
-            trace['mode'] = 'markers'
-            trace['marker'] = {}
-            trace['marker']['symbol'] = symbols[i]
-            trace['marker']['size'] = 12
-            trace['name'] = "Cluster " + str(i)
-            traceList.append(Scatter3d(**trace))
-            # Centroid (A trace of length 1)
-            centroid['x'] = [c.centroid.coords[0]]
-            centroid['y'] = [c.centroid.coords[1]]
-            centroid['z'] = [c.centroid.coords[2]]
-            centroid['mode'] = 'markers'
-            centroid['marker'] = {}
-            centroid['marker']['symbol'] = symbols[i]
-            centroid['marker']['color'] = 'rgb(200,10,10)'
-            centroid['name'] = "Centroid " + str(i)
-            traceList.append(Scatter3d(**centroid))
-
-    title = "K-means clustering with %s clusters" % str(len(data))
-    plotly.offline.plot({
-        "data": traceList,
-        "layout": Layout(title=title)
-    })
+def initial_centroid(p,q,r):
+    initial = []
+    P = Point(p)
+    Q = Point(q)
+    R = Point(r)
+    initial.append(P)
+    initial.append(Q)
+    initial.append(R)
+    print 
+    return initial
 
 if __name__ == "__main__":
     main()

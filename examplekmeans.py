@@ -141,6 +141,7 @@ class Cluster(object):
         centroid_coords = []        
 
         centroid_coords = [math.fsum(dList)/numPoints for dList in unzipped]
+        print "centroid coords : "centroud_coords
         return Point(centroid_coords)
 
 def kmeans(points, k, cutoff):
